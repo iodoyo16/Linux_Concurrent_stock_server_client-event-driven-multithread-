@@ -55,7 +55,8 @@ void *thread(void *vargp){
         Close(connfd);
         P(&clientcnt_mutex);
         active_client_cnt--;
-        printf("client: %d\n",active_client_cnt);
+        if(active_client_cnt==0)
+            writedbtxt(stocktree.tree_ptr);
         V(&clientcnt_mutex);
     }
 }
