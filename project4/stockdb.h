@@ -20,6 +20,7 @@ typedef struct _item{
     int price;
     int readcnt;
     sem_t mutex;
+    sem_t wmutex;
     struct _item *lchild;
     struct _item *rchild;
 }item;
@@ -43,13 +44,7 @@ typedef struct _itemTree{
 extern itemTree stocktree;
 
 sbuf_t sbuf;
-static int byte_cnt;
-static sem_t mutex;
-/*
-item* alloc_item();
-void free_item();
-void free_item_pool();
-*/
+
 int insert(int ID, int number_of_item,int price);
 item* search_insert_pos(item* root,int ID,int* status);
 //int delete_item(int ID, int number_of_del);
@@ -69,8 +64,6 @@ void sbuf_init(sbuf_t *shared_buf_ptr, int n);
 void sbuf_deinit(sbuf_t *shared_buf_ptr);
 void sbuf_insert(sbuf_t *shared_buf_ptr, int item);
 int sbuf_remove(sbuf_t *shared_buf_ptr);
+void echo_cnt(int connfd);
+void *thread(void *vargp);
 
-static void init_echo_cnt(void){
-    Sem_init(&mutex,0,1);
-    byte_cnt=0;
-};

@@ -10,8 +10,12 @@ int insert(int ID, int number_of_item, int price){
         newnode->lchild=newnode->rchild=NULL;
         newnode->left_stock=number_of_item;
         newnode->price=price;
+        newnode->readcnt=0;
         stocktree.tree_ptr=newnode;
         stocktree.item_tree_cnt++;
+        
+        Sem_init(&(newnode->mutex),0,1);
+        Sem_init(&(newnode->wmutex),0,1);
         //printf("root node id %d lft %d price%d\n",newnode->ID,newnode->left_stock,newnode->price);
         return SUCCESS;
     }
@@ -32,6 +36,9 @@ int insert(int ID, int number_of_item, int price){
         newnode->lchild=newnode->rchild=NULL;
         newnode->left_stock=number_of_item;
         newnode->price=price;
+        newnode->readcnt=0;
+        Sem_init(&(newnode->mutex),0,1);
+        Sem_init(&(newnode->wmutex),0,1);
         if(ID<(ptr->ID))
             ptr->lchild=newnode;
         else ptr->rchild=newnode;

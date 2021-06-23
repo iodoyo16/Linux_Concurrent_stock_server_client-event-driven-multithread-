@@ -3,6 +3,13 @@
  */
 /* $begin echo */
 #include "stockdb.h"
+
+static sem_t mutex;
+static int byte_cnt;
+static void init_echo_cnt(void){
+    Sem_init(&mutex,0,1);
+    byte_cnt=0;
+};
 void sbuf_init(sbuf_t *shared_buf_ptr, int slot_max){
     shared_buf_ptr->buf=Calloc(slot_max,sizeof(int));
     shared_buf_ptr->slot_max=slot_max;
@@ -30,37 +37,42 @@ int sbuf_remove(sbuf_t *shared_buf_ptr){
     V(&shared_buf_ptr->slots);
     return item;
 }
+
 void echo_cnt(int connfd) 
 {
-    int n,rn=1;
-    int exit_flag=0;
+    int n;
     char input[MAXLINE]; 
-    char buf[MAXLINE];
-    char* argv[10];
     rio_t rio;
     static pthread_once_t once= PTHREAD_ONCE_INIT;
-
     Pthread_once(&once, init_echo_cnt);
     Rio_readinitb(&rio, connfd);
     while((n = Rio_readlineb(&rio, input, MAXLINE)) != 0) {
+        int rn=1;
+        char buf[MAXLINE];
+        char* argv[10];
+        char output[MAXLINE];
+        int exit_flag=0,argc=0,ret=SUCCESS;
+        memset(output,0,MAXLINE);
         if(n==0)
             break;
         strcpy(buf,input);
         argc=parseline(buf,argv);
+        for(int i=0;i<argc;i++)
+            printf("%s\n", argv[i]);
         if(argc==1){
-            if(!strcmp(buf,"show")){
+            if(!strcmp(argv[0],"show")){
                 show_inorder(stocktree.tree_ptr,output);
             }
-            else if(!strcmp(buf,"exit"))
+            else if(!strcmp(argv[0],"exit"))
                 exit_flag=1;
         }
         else if(argc==3){
             int ID=atoi(argv[1]);
             int num_of_deal=atoi(argv[2]);
-            if(!strcmp(buf,"buy"))
-                ret=buy(stocktree.tree_ptr,num_of_deal);
-            else if(!strcmp(buf,"sell"))
-                ret=sell(ID,number_of_deal);
+            if(!strcmp(argv[0],"buy"))
+                ret=buy(ID,num_of_deal);
+            else if(!strcmp(argv[0],"sell"))
+                ret=sell(ID,num_of_deal);
             if(ret==SUCCESS)
                 sprintf(output,"[%s] success",argv[0]);
             else
@@ -73,87 +85,57 @@ void echo_cnt(int connfd)
         V(&mutex);
         rn=strlen(output);
 	    Rio_writen(connfd, output, rn);
+        if(exit_flag==1)
+            return;
     }
 }
 /* $end echo */
-int do_update_stock_table(int connfd) 
-{
-    int n,ret,rn=1;
-    int argc;
-    char input[MAXLINE];
-    char buf[MAXLINE];
-    char output[MAXLINE];
-    char*argv[10];
-    rio_t rio;
-    memset(output,0,MAXLINE);
-    Rio_readinitb(&rio, connfd);
-    n = Rio_readlineb(&rio, input, MAXLINE);
-    strcpy(buf,input);
-    argc=parseline(buf,argv);
-    if(n==0)
-        return EXIT;
-	printf("server received %d bytes\n", n);
 
-    ret=cmdfunc(argc,argv,output);
-    rn=strlen(output);
-    //printf("%s rn:%d\n",output,rn);
-    
-    Rio_writen(connfd, output, rn);
-    return ret;
-}
-/* $end echo */
-int cmdfunc(int argc,char* argv[],char output[]){
-    int ret;
-    if(argc==1){
-        if (!strcmp(argv[0],"show")){
-            show_inorder(stocktree.tree_ptr,output);
-            ret=DONE;
-        }
-        else if(!strcmp(argv[0],"exit"))
-            ret=EXIT;
-        else
-            ret=DONE;
-    }
-    else if(argc==3){
-        int ID=atoi(argv[1]);
-        int number_of_deal=atoi(argv[2]);
-        if(!strcmp(argv[0],"buy"))
-            ret=buy(ID,number_of_deal);
-        else if(!strcmp(argv[0],"sell"))
-            ret=sell(ID,number_of_deal);
-        else
-            ret=DONE;
-        if(ret==SUCCESS)
-            sprintf(output,"[%s] success",argv[0]);
-        else
-            strcpy(output,"Not enough left stock");
-    }
-    else
-        ret=DONE;
-    strcat(output,"\n");
-    return ret;
-}
 int sell(int ID,int num_of_sell){
     item* ptr=search_item(stocktree.tree_ptr,ID);
     if(ptr==NULL)
         return FAIL;
     else{
+        P(&(ptr->wmutex));
         ptr->left_stock+=num_of_sell;
+        V(&(ptr->wmutex));
         return SUCCESS;
     }
 }
 int buy(int ID,int num_of_buy){
     item* ptr=search_item(stocktree.tree_ptr,ID);
+    int ret;
     if(ptr==NULL){
         printf("no item\n");
         return FAIL;
     }
     else{
-        if((ptr->left_stock)<num_of_buy)
-            return FAIL;
-        ptr->left_stock-=num_of_buy;
-        return SUCCESS;
+        P(&(ptr->mutex));// READ_CNT LOCK
+        (ptr->readcnt)++;
+        if(ptr->readcnt==1)// FIRST IN
+            P(&(ptr->wmutex));
+        V(&(ptr->mutex));// READ_CNT UNLOCK
+
+        // read part
+        int avail_flag=(ptr->left_stock)<num_of_buy?-1:1;   
+        // end read
+
+        P(&(ptr->mutex));// READ_CNT LOCK
+        (ptr->readcnt)--;
+        if(ptr->readcnt==0)
+            V(&(ptr->wmutex));// LAST OUT
+        V(&(ptr->mutex));// 
+
+        if(avail_flag==1){
+            P(&(ptr->wmutex));
+            ptr->left_stock-=num_of_buy;
+            V(&(ptr->wmutex));
+            ret=SUCCESS;
+        }
+        else
+            ret=FAIL;
     }
+    return ret;
 }
 item* search_item(item* root,int ID){
     item* temp=root;
@@ -175,7 +157,23 @@ void show_inorder(item* cur_node, char output[]){
     if(cur_node==NULL)
          return;
     show_inorder(cur_node->lchild, output);
+    P(&(cur_node->mutex));  // READ CNT LOCK
+    (cur_node->readcnt)++;
+    if(cur_node->readcnt==1)
+        P(&(cur_node->wmutex)); // WRITE LOCK
+    V(&(cur_node->mutex)); // READ CNT UNLOCK
+
+    // READ PART
     sprintf(buf,"%d %d %d",cur_node->ID,cur_node->left_stock,cur_node->price);
+    // READ PART END
+
+    P(&(cur_node->mutex));  // READ CNT LOCK
+    (cur_node->readcnt)--;
+    if(cur_node->readcnt==0)
+        V(&(cur_node->wmutex)); // WRITE UNLOCK
+    V(&(cur_node->mutex)); // READ CNT UNLOCK
+
+
     if(strlen(output)!=0)
         strcat(output," ");
     strcat(output,buf);
@@ -206,3 +204,60 @@ int parseline(char *buf, char **argv)
     //if (argc == 0)  /* Ignore blank line */
 	return argc;
 }
+/*
+int do_update_stock_table(int connfd) 
+{
+    int n,ret,rn=1;
+    int argc;
+    char input[MAXLINE];
+    char buf[MAXLINE];
+    char output[MAXLINE];
+    char*argv[10];
+    rio_t rio;
+    memset(output,0,MAXLINE);
+    Rio_readinitb(&rio, connfd);
+    n = Rio_readlineb(&rio, input, MAXLINE);
+    strcpy(buf,input);
+    argc=parseline(buf,argv);
+    if(n==0)
+        return EXIT;
+	printf("server received %d bytes\n", n);
+
+    ret=cmdfunc(argc,argv,output);
+    rn=strlen(output);
+    //printf("%s rn:%d\n",output,rn);
+    
+    Rio_writen(connfd, output, rn);
+    return ret;
+}
+int cmdfunc(int argc,char* argv[],char output[]){
+    int ret;
+    if(argc==1){
+        if (!strcmp(argv[0],"show")){
+            show_inorder(stocktree.tree_ptr,output);
+            ret=DONE;
+        }
+        else if(!strcmp(argv[0],"exit"))
+            ret=EXIT;
+        else
+            ret=DONE;
+    }
+    else if(argc==3){
+        int ID=atoi(argv[1]);
+        int number_of_deal=atoi(argv[2]);
+        if(!strcmp(argv[0],"buy"))
+            ret=buy(ID,number_of_deal);
+        else if(!strcmp(argv[0],"sell"))
+            ret=sell(ID,number_of_deal);
+        else
+            ret=DONE;
+        if(ret==SUCCESS)
+            sprintf(output,"[%s] success",argv[0]);
+        else
+            strcpy(output,"Not enough left stock");
+    }
+    else
+        ret=DONE;
+    strcat(output,"\n");
+    return ret;
+}*/

@@ -5,13 +5,14 @@
 #define MAXCONNECT 100
 #include "stockdb.h"
 
+static sem_t clientcnt_mutex;
 itemTree stocktree={NULL,0};
-
+volatile int active_client_cnt=0;
 
 void echo_cnt(int connfd);
 void initDB();
 void inorder(item* cur_node);
-void *thread(void *vargp);
+
 
 int main(int argc, char **argv) 
 {
@@ -29,6 +30,7 @@ int main(int argc, char **argv)
     initDB();
     listenfd = Open_listenfd(argv[1]);
     sbuf_init(&sbuf,SBUFSIZE);
+    Sem_init(&clientcnt_mutex,0,1);
     for(int i=0;i<MAXTHREAD;i++){
         Pthread_create(&tid,NULL,thread,NULL);
     }
@@ -38,11 +40,25 @@ int main(int argc, char **argv)
         Getnameinfo((SA *) &clientaddr, clientlen, client_hostname, MAXLINE, 
                     client_port, MAXLINE, 0);
         printf("Connected to (%s, %s)\n", client_hostname, client_port);
+        P(&clientcnt_mutex);
+        active_client_cnt++;
+        V(&clientcnt_mutex);
         sbuf_insert(&sbuf,connfd);
     }
     exit(0);
 }
-
+void *thread(void *vargp){
+    Pthread_detach(pthread_self());
+    while(1){
+        int connfd = sbuf_remove(&sbuf);
+        echo_cnt(connfd);
+        Close(connfd);
+        P(&clientcnt_mutex);
+        active_client_cnt--;
+        printf("client: %d\n",active_client_cnt);
+        V(&clientcnt_mutex);
+    }
+}
 
 void initDB(){
     FILE* fp;
@@ -64,14 +80,7 @@ void inorder(item* cur_node){
     //printf("id: %d left_stock: %d price: %d\n",cur_node->ID,cur_node->left_stock,cur_node->price);
     inorder(cur_node->rchild);
 }
-void *thread(void *vargp){
-    Pthread_detach(pthread_self());
-    while(1){
-        int connfd = sbuf_remove(&sbuf);
-        echo_cnt(connfd);
-        Close(connfd);
-    }
-}
+
 /* $end echoserverimain */
 
 
