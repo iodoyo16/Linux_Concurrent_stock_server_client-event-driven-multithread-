@@ -3,7 +3,7 @@
 
 #define MAX_CLIENT 4
 #define ORDER_PER_CLIENT 10
-#define STOCK_NUM 10
+#define STOCK_NUM 5
 #define BUY_SELL_MAX 10
 
 int main(int argc, char **argv) 
@@ -70,10 +70,10 @@ int main(int argc, char **argv)
 					strcat(buf, "\n");
 				}
 				//strcpy(buf, "buy 1 2\n");
-			
+				Fputs(buf, stdout);
 				Rio_writen(clientfd, buf, strlen(buf));
 				Rio_readlineb(&rio, buf, MAXLINE);
-				Fputs(buf, stdout);
+				Fputs(buf, stdout);////////////////////////////////NEED TO FIX
 
 				usleep(1000000);
 			}
