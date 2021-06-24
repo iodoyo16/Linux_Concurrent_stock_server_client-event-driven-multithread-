@@ -4,6 +4,7 @@
 /* $begin echoclientmain */
 #include "csapp.h"
 
+
 int main(int argc, char **argv) 
 {
     int clientfd;
@@ -16,16 +17,19 @@ int main(int argc, char **argv)
     }
     host = argv[1];
     port = argv[2];
-
+    
     clientfd = Open_clientfd(host, port);
     Rio_readinitb(&rio, clientfd);
 
     while (Fgets(buf, MAXLINE, stdin) != NULL) {
-	Rio_writen(clientfd, buf, strlen(buf));
-	Rio_readlineb(&rio, buf, MAXLINE);
-	Fputs(buf, stdout);
+        if(!strcmp(buf,"exit\n"))
+            break;
+	    Rio_writen(clientfd, buf, strlen(buf));
+	    Rio_readlineb(&rio, buf, MAXLINE);
+	    Fputs(buf, stdout);
     }
     Close(clientfd); //line:netp:echoclient:close
     exit(0);
 }
 /* $end echoclientmain */
+
