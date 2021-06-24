@@ -173,7 +173,7 @@ void show_inorder(item* cur_node, char output[]){
 
 
     if(strlen(output)!=0)
-        strcat(output," ");
+        strcat(output,", ");
     strcat(output,buf);
     show_inorder(cur_node->rchild, output);
 }

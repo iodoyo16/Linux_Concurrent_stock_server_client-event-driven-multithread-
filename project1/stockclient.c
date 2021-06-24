@@ -22,8 +22,9 @@ int main(int argc, char **argv)
     Rio_readinitb(&rio, clientfd);
 
     while (Fgets(buf, MAXLINE, stdin) != NULL) {
-        if(!strcmp(buf,"exit\n"))
+        if(!strcmp(buf,"exit\n")){
             break;
+		}
 	    Rio_writen(clientfd, buf, strlen(buf));
 	    Rio_readlineb(&rio, buf, MAXLINE);
 	    Fputs(buf, stdout);

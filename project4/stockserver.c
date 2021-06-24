@@ -8,7 +8,6 @@
 static sem_t clientcnt_mutex;
 itemTree stocktree={NULL,0};
 volatile int active_client_cnt=0;
-
 void echo_cnt(int connfd);
 void initDB();
 void inorder(item* cur_node);
@@ -16,6 +15,8 @@ void inorder(item* cur_node);
 
 int main(int argc, char **argv) 
 {
+    
+    
     int listenfd, connfd;
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;  /* Enough space for any address */  //line:netp:echoserveri:sockaddrstorage
@@ -55,8 +56,9 @@ void *thread(void *vargp){
         Close(connfd);
         P(&clientcnt_mutex);
         active_client_cnt--;
-        if(active_client_cnt==0)
+        if(active_client_cnt==0){
             writedbtxt(stocktree.tree_ptr);
+        }
         V(&clientcnt_mutex);
     }
 }
@@ -67,8 +69,6 @@ void initDB(){
     fp=Fopen("stock.txt","r");
     while(EOF!=fscanf(fp,"%d %d %d",&id,&stocknum,&price)){
         //int status;
-        if(feof(fp))
-            break;
         insert(id,stocknum,price);
     }
     Fclose(fp);

@@ -18,8 +18,9 @@ int do_update_stock_table(int connfd)
     n = Rio_readlineb(&rio, input, MAXLINE);
     strcpy(buf,input);
     argc=parseline(buf,argv);
-    if(n==0)
+    if(n==0){
         return EXIT;
+	}
 	printf("server received %d bytes\n", n);
 
     ret=cmdfunc(argc,argv,output);
@@ -105,7 +106,7 @@ void show_inorder(item* cur_node, char output[]){
     show_inorder(cur_node->lchild, output);
     sprintf(buf,"%d %d %d",cur_node->ID,cur_node->left_stock,cur_node->price);
     if(strlen(output)!=0)
-        strcat(output," ");
+        strcat(output,", ");
     strcat(output,buf);
     show_inorder(cur_node->rchild, output);
 }

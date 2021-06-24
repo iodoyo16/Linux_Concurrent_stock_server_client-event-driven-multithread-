@@ -1,7 +1,7 @@
 #include "csapp.h"
 #include <time.h>
 
-#define MAX_CLIENT 4
+#define MAX_CLIENT 100
 #define ORDER_PER_CLIENT 10
 #define STOCK_NUM 5
 #define BUY_SELL_MAX 10
@@ -40,7 +40,7 @@ int main(int argc, char **argv)
 			srand((unsigned int) getpid());
 
 			for(i=0;i<ORDER_PER_CLIENT;i++){
-				int option = rand() % 3;
+				int option =rand() % 3;
 				
 				if(option == 0){//show
 					strcpy(buf, "show\n");

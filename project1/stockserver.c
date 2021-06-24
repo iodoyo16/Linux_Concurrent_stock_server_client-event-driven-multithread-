@@ -34,12 +34,10 @@ int main(int argc, char **argv)
     FD_SET(listenfd,&preserve_readfds);
     while (1) {
         readfds=preserve_readfds;
-        //printf("before select\n");
         Select(maxfdnum+1,&readfds,NULL,NULL,NULL);
-        for(int i_fd=0;i_fd<MAXCONNECT;i_fd++){
+        for(int i_fd=0;i_fd<=maxfdnum;i_fd++){
             if(FD_ISSET(i_fd,&readfds)){
                 if(i_fd==listenfd){
-                    //printf("before accept\n");
                     connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
                     Getnameinfo((SA *) &clientaddr, clientlen, client_hostname, MAXLINE, client_port, MAXLINE, 0);
                     printf("Connected to (%s, %s)\n", client_hostname, client_port);
@@ -53,11 +51,10 @@ int main(int argc, char **argv)
                     if(status==EXIT){
                         FD_CLR(i_fd,&preserve_readfds);
                         Close(i_fd);
-                        //printf("client %d is closed\n",i_fd);
                         active_client_num--;
-                        //printf("remain client: %d\n",active_client_num);
-                        if(active_client_num==0)
+                        if(active_client_num==0){
                             writedbtxt(stocktree.tree_ptr);
+						}
                     }
                 }
             }
@@ -72,9 +69,6 @@ void initDB(){
     int id,stocknum,price;
     fp=Fopen("stock.txt","r");
     while(EOF!=fscanf(fp,"%d %d %d",&id,&stocknum,&price)){
-        //int status;
-        if(feof(fp))
-            break;
         insert(id,stocknum,price);
     }
     Fclose(fp);
@@ -84,7 +78,6 @@ void inorder(item* cur_node){
     if(cur_node==NULL)
          return;
     inorder(cur_node->lchild);
-    //printf("id: %d left_stock: %d price: %d\n",cur_node->ID,cur_node->left_stock,cur_node->price);
     inorder(cur_node->rchild);
 }
 
